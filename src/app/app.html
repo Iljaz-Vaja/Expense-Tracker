@@ -1,0 +1,82 @@
+<div class="shell">
+  <!-- Desktop sidebar -->
+  <aside class="sidebar">
+    <a class="brand" routerLink="/">
+      <span class="logo">💰</span>
+      <span>Expense<b>Tracker</b></span>
+    </a>
+
+    <button class="btn btn-primary btn-block" (click)="ui.openAdd()">
+      <app-icon name="plus" [size]="18" /> Add expense <kbd>N</kbd>
+    </button>
+
+    <nav class="side-nav" aria-label="Main">
+      @for (n of nav; track n.path) {
+        <a [routerLink]="n.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: n.exact }">
+          <app-icon [name]="n.icon" />
+          <span>{{ n.label }}</span>
+        </a>
+      }
+    </nav>
+
+    <div class="side-foot">
+      @if (ready()) {
+        <div class="side-month">
+          <span class="kpi-label">This month</span>
+          <strong>{{ monthTotal() | money }}</strong>
+          @if (budget() > 0) {
+            <div class="mini-progress"><div [style.width.%]="budgetPct()" [class.over]="budgetPct() >= 100"></div></div>
+            <span class="muted small">of {{ budget() | money }} budget</span>
+          }
+        </div>
+      }
+      <button class="btn btn-ghost btn-block theme-btn" (click)="cycleTheme()">
+        {{ theme() === 'dark' ? '🌙' : theme() === 'light' ? '☀️' : '🌓' }}
+        Theme: {{ theme() === 'system' ? 'Auto' : theme() === 'dark' ? 'Dark' : 'Light' }}
+      </button>
+    </div>
+  </aside>
+
+  <!-- Mobile top bar -->
+  <header class="topbar">
+    <a class="brand" routerLink="/">
+      <span class="logo">💰</span>
+      <span>Expense<b>Tracker</b></span>
+    </a>
+    <button class="icon-btn" (click)="cycleTheme()" aria-label="Change theme">
+      {{ theme() === 'dark' ? '🌙' : theme() === 'light' ? '☀️' : '🌓' }}
+    </button>
+  </header>
+
+  <main class="content">
+    @if (ready()) {
+      <router-outlet />
+    } @else {
+      <div class="skeleton" aria-busy="true" aria-label="Loading">
+        <div class="sk sk-title"></div>
+        <div class="sk-row"><div class="sk"></div><div class="sk"></div></div>
+        <div class="sk sk-block"></div>
+      </div>
+    }
+  </main>
+
+  <!-- Mobile bottom navigation -->
+  <nav class="bottom-nav" aria-label="Main">
+    @for (n of nav; track n.path; let i = $index) {
+      @if (i === 2) {
+        <button class="fab" (click)="ui.openAdd()" aria-label="Add expense">
+          <app-icon name="plus" [size]="26" />
+        </button>
+      }
+      <a [routerLink]="n.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: n.exact }">
+        <app-icon [name]="n.icon" [size]="22" />
+        <span>{{ n.label }}</span>
+      </a>
+    }
+  </nav>
+</div>
+
+@if (ready()) {
+  <app-expense-form />
+}
+<app-toasts />

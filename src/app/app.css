@@ -1,0 +1,47 @@
+.shell { min-height: 100dvh; }
+
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); font-size: 17px; letter-spacing: -.01em; }
+.brand b { color: var(--accent); margin-left: 1px; }
+.logo { width: 36px; height: 36px; display: grid; place-items: center; font-size: 20px; border-radius: 11px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+
+/* ---------- Sidebar (desktop) ---------- */
+.sidebar { display: none; }
+kbd { margin-left: auto; font: 600 11px/1 inherit; font-family: inherit; padding: 3px 6px; border-radius: 6px; background: rgba(255,255,255,.2); }
+.side-nav { display: flex; flex-direction: column; gap: 2px; }
+.side-nav a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; color: var(--text-2); text-decoration: none; font-weight: 500; transition: background .15s, color .15s; }
+.side-nav a:hover { background: var(--surface-2); color: var(--text); }
+.side-nav a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+.side-month { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--surface-2); }
+.side-month strong { font-size: 18px; }
+.mini-progress { height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; margin-top: 4px; }
+.mini-progress div { height: 100%; background: var(--good); border-radius: 99px; }
+.mini-progress div.over { background: var(--critical); }
+.theme-btn { justify-content: flex-start; }
+
+/* ---------- Top bar & bottom nav (mobile) ---------- */
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--border); }
+.topbar .icon-btn { font-size: 18px; }
+
+.bottom-nav { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: saturate(1.4) blur(12px); border-top: 1px solid var(--border); }
+.bottom-nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: var(--text-3); text-decoration: none; font-size: 10.5px; font-weight: 500; border-radius: 10px; }
+.bottom-nav a.active { color: var(--accent); }
+.fab { justify-self: center; width: 54px; height: 54px; margin-top: -26px; border-radius: 18px; border: 0; display: grid; place-items: center; color: #fff; cursor: pointer; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 45%, transparent); transition: transform .15s; }
+.fab:active { transform: scale(.94); }
+
+.content { padding: 20px 16px calc(100px + env(safe-area-inset-bottom)); max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+@media (min-width: 960px) {
+  .shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); }
+  .sidebar { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: 22px; padding: 22px 16px; border-right: 1px solid var(--border); background: var(--surface); }
+  .topbar, .bottom-nav { display: none; }
+  .content { padding: 32px 36px 48px; width: 100%; gap: 20px; }
+}
+
+/* ---------- Loading skeleton ---------- */
+.skeleton { display: flex; flex-direction: column; gap: 16px; }
+.sk { border-radius: 16px; background: linear-gradient(90deg, var(--surface-2), var(--surface), var(--surface-2)); background-size: 200% 100%; animation: sh 1.2s linear infinite; height: 110px; }
+.sk-title { height: 44px; width: 55%; }
+.sk-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sk-block { height: 260px; }
+@keyframes sh { to { background-position: -200% 0; } }

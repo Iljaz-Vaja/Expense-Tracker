@@ -1,0 +1,12 @@
+{
+  "name": "Expense Tracker",
+  "short_name": "Expenses",
+  "description": "Track your daily expenses, budgets and spending insights.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0e0d",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "favicon.ico", "sizes": "48x48", "type": "image/x-icon" }
+  ]
+}
