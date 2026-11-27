@@ -6,9 +6,14 @@
       <span>Expense<b>Tracker</b></span>
     </a>
 
-    <button class="btn btn-primary btn-block" (click)="ui.openAdd()">
-      <app-icon name="plus" [size]="18" /> Add expense <kbd>N</kbd>
-    </button>
+    <div class="add-group">
+      <button class="btn btn-primary btn-block" (click)="ui.openAdd()">
+        <app-icon name="out" [size]="18" /> Add expense <kbd>N</kbd>
+      </button>
+      <button class="btn btn-income btn-block" (click)="ui.openAdd({ type: 'income' })">
+        <app-icon name="in" [size]="18" /> Add income <kbd>I</kbd>
+      </button>
+    </div>
 
     <nav class="side-nav" aria-label="Main">
       @for (n of nav; track n.path) {
@@ -23,7 +28,11 @@
       @if (ready()) {
         <div class="side-month">
           <span class="kpi-label">This month</span>
-          <strong>{{ monthTotal() | money }}</strong>
+          <strong [class.pos]="monthNet() > 0" [class.neg]="monthNet() < 0">{{ monthNet() > 0 ? '+' : monthNet() < 0 ? '−' : '' }}{{ abs(monthNet()) | money }}</strong>
+          <div class="io">
+            <span><app-icon name="in" [size]="14" class="pos" /> {{ monthIncome() | money }}</span>
+            <span><app-icon name="out" [size]="14" class="neg" /> {{ monthTotal() | money }}</span>
+          </div>
           @if (budget() > 0) {
             <div class="mini-progress"><div [style.width.%]="budgetPct()" [class.over]="budgetPct() >= 100"></div></div>
             <span class="muted small">of {{ budget() | money }} budget</span>
@@ -64,7 +73,7 @@
   <nav class="bottom-nav" aria-label="Main">
     @for (n of nav; track n.path; let i = $index) {
       @if (i === 2) {
-        <button class="fab" (click)="ui.openAdd()" aria-label="Add expense">
+        <button class="fab" (click)="ui.openAdd()" aria-label="Add transaction">
           <app-icon name="plus" [size]="26" />
         </button>
       }

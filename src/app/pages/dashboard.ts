@@ -8,62 +8,93 @@ import { MoneyPipe } from '../shared/money.pipe';
 import { Icon } from '../shared/icon';
 import { BarChart } from '../shared/bar-chart';
 import { DonutChart } from '../shared/donut-chart';
+import { CashflowChart } from '../shared/cashflow-chart';
 import { ExpenseRow } from '../shared/expense-row';
 import { addMonths, daysInMonth, endOfDay, periodRange } from '../utils/date';
-import { byCategory, dailySeries, filterRange, foldCategories, sum } from '../utils/stats';
+import {
+  byCategory,
+  cashflowSeries,
+  dailySeries,
+  filterRange,
+  foldCategories,
+  incomes,
+  net,
+  savingsRate,
+  spending,
+  sum,
+} from '../utils/stats';
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'page' },
-  imports: [MoneyPipe, Icon, BarChart, DonutChart, ExpenseRow, RouterLink, DecimalPipe, DatePipe],
+  imports: [MoneyPipe, Icon, BarChart, DonutChart, CashflowChart, ExpenseRow, RouterLink, DecimalPipe, DatePipe],
   template: `
     <header class="page-head">
       <div>
         <p class="eyebrow">{{ today | date: 'EEEE, MMMM d' }}</p>
         <h1>{{ greeting }}</h1>
       </div>
-      <button class="btn btn-primary hide-mobile" (click)="ui.openAdd()">
-        <app-icon name="plus" [size]="18" /> Add expense
-      </button>
+      <div class="head-actions hide-mobile">
+        <button class="btn btn-ghost" (click)="ui.openAdd({ type: 'income' })">
+          <app-icon name="in" [size]="18" /> Add income
+        </button>
+        <button class="btn btn-primary" (click)="ui.openAdd()">
+          <app-icon name="out" [size]="18" /> Add expense
+        </button>
+      </div>
     </header>
 
     @if (!svc.entries().length) {
       <section class="card empty">
         <div class="empty-art">💸</div>
-        <h2>Start tracking your spending</h2>
-        <p>Add your first expense to see insights, budgets and charts here.</p>
-        <button class="btn btn-primary" (click)="ui.openAdd()"><app-icon name="plus" [size]="18" /> Add first expense</button>
+        <h2>Take control of your money</h2>
+        <p>Add your income and expenses to see your balance, cash flow and where your money goes.</p>
+        <div class="empty-actions">
+          <button class="btn btn-ghost" (click)="ui.openAdd({ type: 'income' })"><app-icon name="in" [size]="18" /> Add income</button>
+          <button class="btn btn-primary" (click)="ui.openAdd()"><app-icon name="out" [size]="18" /> Add expense</button>
+        </div>
       </section>
     } @else {
       <section class="kpis">
         <div class="card kpi hero">
-          <span class="kpi-label">Spent this month</span>
-          <strong class="kpi-value">{{ monthTotal() | money }}</strong>
-          @if (change() !== null && (change()! >= 1 || change()! <= -1)) {
-            @let c = change()!;
-            <span class="delta" [class.up]="c > 0" [class.down]="c < 0">
-              <app-icon [name]="c > 0 ? 'up' : 'down'" [size]="14" />
-              {{ (c > 0 ? c : -c) | number: '1.0-0' }}% vs same time last month
+          <span class="kpi-label">Total balance</span>
+          <strong class="kpi-value">{{ balance() < 0 ? '−' : '' }}{{ abs(balance()) | money }}</strong>
+          <span class="kpi-sub">
+            This month {{ monthNet() >= 0 ? '+' : '−' }}{{ abs(monthNet()) | money }}
+          </span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label"><span class="dot in"></span>Income</span>
+          <strong class="kpi-value pos">{{ monthIncome() | money }}</strong>
+          @if (incomeChange(); as c) {
+            <span class="delta" [class.good]="c > 0" [class.bad]="c < 0">
+              <app-icon [name]="c > 0 ? 'up' : 'down'" [size]="14" /> {{ abs(c) | number: '1.0-0' }}% vs last month
             </span>
           } @else {
-            <span class="kpi-sub">{{ monthCount() }} transactions</span>
+            <span class="kpi-sub">This month</span>
           }
         </div>
         <div class="card kpi">
-          <span class="kpi-label">Today</span>
-          <strong class="kpi-value">{{ todayTotal() | money }}</strong>
-          <span class="kpi-sub">{{ todayCount() }} {{ todayCount() === 1 ? 'expense' : 'expenses' }}</span>
+          <span class="kpi-label"><span class="dot out"></span>Expenses</span>
+          <strong class="kpi-value">{{ monthTotal() | money }}</strong>
+          @if (change(); as c) {
+            <span class="delta" [class.bad]="c > 0" [class.good]="c < 0">
+              <app-icon [name]="c > 0 ? 'up' : 'down'" [size]="14" /> {{ abs(c) | number: '1.0-0' }}% vs same time last month
+            </span>
+          } @else {
+            <span class="kpi-sub">{{ monthCount() }} transactions this month</span>
+          }
         </div>
         <div class="card kpi">
-          <span class="kpi-label">Daily average</span>
-          <strong class="kpi-value">{{ avgPerDay() | money }}</strong>
-          <span class="kpi-sub">Projected {{ projected() | money: true }} this month</span>
-        </div>
-        <div class="card kpi">
-          <span class="kpi-label">This week</span>
-          <strong class="kpi-value">{{ weekTotal() | money }}</strong>
-          <span class="kpi-sub">Since Monday</span>
+          <span class="kpi-label">Savings rate</span>
+          @if (savings() !== null) {
+            <strong class="kpi-value" [class.pos]="savings()! > 0" [class.neg]="savings()! < 0">{{ savings() | number: '1.0-0' }}%</strong>
+            <span class="kpi-sub">{{ savings()! >= 20 ? 'Great job 🎉' : savings()! >= 0 ? 'Of income kept this month' : 'Spending more than you earn' }}</span>
+          } @else {
+            <strong class="kpi-value muted">—</strong>
+            <span class="kpi-sub">Add income to see it</span>
+          }
         </div>
       </section>
 
@@ -111,10 +142,10 @@ import { byCategory, dailySeries, filterRange, foldCategories, sum } from '../ut
       <div class="grid-2">
         <section class="card">
           <div class="card-head">
-            <h2>Last 30 days</h2>
-            <span class="muted small">{{ last30Total() | money }}</span>
+            <h2>Cash flow</h2>
+            <span class="muted small">Last 6 months</span>
           </div>
-          <app-bar-chart [data]="daily()" [height]="170" label="Daily spending, last 30 days" [highlightLast]="true" />
+          <app-cashflow-chart [data]="cashflow()" [height]="170" label="Income vs expenses, last 6 months" />
         </section>
 
         <section class="card">
@@ -126,6 +157,32 @@ import { byCategory, dailySeries, filterRange, foldCategories, sum } from '../ut
             <app-donut-chart [data]="categories()" />
           } @else {
             <p class="muted">No expenses this month yet.</p>
+          }
+        </section>
+      </div>
+
+      <div class="grid-2">
+        <section class="card">
+          <div class="card-head">
+            <h2>Daily spending</h2>
+            <span class="muted small">30 days · {{ last30Total() | money }}</span>
+          </div>
+          <app-bar-chart [data]="daily()" [height]="170" label="Daily spending, last 30 days" [highlightLast]="true" />
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>Income sources</h2>
+            <span class="muted small">This month</span>
+          </div>
+          @if (incomeCategories().length) {
+            <app-donut-chart [data]="incomeCategories()" />
+          } @else {
+            <div class="mini-empty">
+              <app-icon name="piggy" [size]="28" />
+              <p class="muted">No income recorded this month.</p>
+              <button class="btn btn-ghost" (click)="ui.openAdd({ type: 'income' })"><app-icon name="in" [size]="18" /> Add income</button>
+            </div>
           }
         </section>
       </div>
@@ -144,12 +201,16 @@ import { byCategory, dailySeries, filterRange, foldCategories, sum } from '../ut
     }
   `,
   styles: `
+    .head-actions { display: flex; gap: 8px; }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
     @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 480px) { .kpis { gap: 10px; } }
     .kpi { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .kpi-label { display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.in { background: var(--income); } .dot.out { background: var(--expense); }
     .hero { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: 0; }
-    .hero .kpi-label, .hero .delta { color: rgba(255,255,255,.85); }
+    .hero .kpi-label, .hero .kpi-sub { color: rgba(255,255,255,.85); }
     .delta { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; }
     .budget-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
     .budget-line { margin: 4px 0 0; font-size: 15px; color: var(--text-2); }
@@ -165,12 +226,16 @@ import { byCategory, dailySeries, filterRange, foldCategories, sum } from '../ut
     .empty { text-align: center; padding: 48px 24px; }
     .empty-art { font-size: 56px; }
     .empty p { color: var(--text-2); }
+    .empty-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .mini-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 0; text-align: center; color: var(--income); }
+    .mini-empty p { margin: 0 0 6px; }
   `,
 })
 export class DashboardPage {
   protected readonly svc = inject(ExpenseService);
   protected readonly ui = inject(UiService);
   private readonly settings = inject(SettingsService);
+  protected readonly abs = Math.abs;
 
   protected readonly today = new Date();
   protected readonly greeting = (() => {
@@ -178,22 +243,30 @@ export class DashboardPage {
     return h < 12 ? 'Good morning 👋' : h < 18 ? 'Good afternoon 👋' : 'Good evening 👋';
   })();
 
-  private readonly month = computed(() => filterRange(this.svc.entries(), periodRange('month')));
-  protected readonly monthTotal = computed(() => sum(this.month()));
-  protected readonly monthCount = computed(() => this.month().length);
+  protected readonly balance = computed(() => net(this.svc.entries()));
 
-  /** % change against the same number of days of last month. */
-  protected readonly change = computed(() => {
+  private readonly month = computed(() => filterRange(this.svc.entries(), periodRange('month')));
+  private readonly monthSpend = computed(() => spending(this.month()));
+  private readonly monthIn = computed(() => incomes(this.month()));
+  protected readonly monthTotal = computed(() => sum(this.monthSpend()));
+  protected readonly monthIncome = computed(() => sum(this.monthIn()));
+  protected readonly monthNet = computed(() => this.monthIncome() - this.monthTotal());
+  protected readonly monthCount = computed(() => this.monthSpend().length);
+  protected readonly savings = computed(() => savingsRate(this.monthIncome(), this.monthTotal()));
+
+  /** Same number of days of last month – a fair comparison mid-month. */
+  private readonly lastMonthToDate = computed(() => {
     const start = addMonths(this.today, -1);
     const end = endOfDay(new Date(start.getFullYear(), start.getMonth(), Math.min(this.today.getDate(), daysInMonth(start))));
-    const prev = sum(filterRange(this.svc.entries(), { start, end }));
-    return prev > 0 ? ((this.monthTotal() - prev) / prev) * 100 : null;
+    return filterRange(this.svc.entries(), { start, end });
   });
 
-  private readonly todayEntries = computed(() => filterRange(this.svc.entries(), periodRange('today')));
-  protected readonly todayTotal = computed(() => sum(this.todayEntries()));
-  protected readonly todayCount = computed(() => this.todayEntries().length);
-  protected readonly weekTotal = computed(() => sum(filterRange(this.svc.entries(), periodRange('week'))));
+  /** % change in spending; null when there is nothing meaningful to compare. */
+  protected readonly change = computed(() => pctChange(this.monthTotal(), sum(spending(this.lastMonthToDate()))));
+  /** Income compares with the whole of last month (salaries land on fixed days). */
+  protected readonly incomeChange = computed(() =>
+    pctChange(this.monthIncome(), sum(incomes(filterRange(this.svc.entries(), periodRange('lastMonth'))))),
+  );
 
   protected readonly avgPerDay = computed(() => this.monthTotal() / this.today.getDate());
   protected readonly projected = computed(() => this.avgPerDay() * daysInMonth(this.today));
@@ -209,11 +282,19 @@ export class DashboardPage {
     return pct > 100 ? 'critical' : pct >= 80 || this.projected() > this.budget() ? 'warning' : 'good';
   });
 
-  protected readonly daily = computed(() => dailySeries(this.svc.entries(), this.today, 30));
+  protected readonly cashflow = computed(() => cashflowSeries(this.svc.entries(), this.today, 6));
+  protected readonly daily = computed(() => dailySeries(spending(this.svc.entries()), this.today, 30));
   protected readonly last30Total = computed(() => this.daily().reduce((s, d) => s + d.value, 0));
-  protected readonly categories = computed(() => foldCategories(byCategory(this.month()), 5));
+  protected readonly categories = computed(() => foldCategories(byCategory(this.monthSpend()), 5));
+  protected readonly incomeCategories = computed(() => foldCategories(byCategory(this.monthIn()), 5));
 
   protected readonly recent = computed(() =>
     [...this.svc.entries()].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 6),
   );
+}
+
+function pctChange(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  const c = ((current - previous) / previous) * 100;
+  return Math.abs(c) >= 1 ? c : null;
 }

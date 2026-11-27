@@ -13,7 +13,7 @@ const GAP = 1.2;
   template: `
     <div class="donut-wrap">
       <div class="donut">
-        <svg viewBox="0 0 100 100" role="img" [attr.aria-label]="'Spending by category'">
+        <svg viewBox="0 0 100 100" role="img" [attr.aria-label]="label()">
           <circle cx="50" cy="50" [attr.r]="r" fill="none" stroke="var(--surface-2)" stroke-width="12" />
           @for (s of segments(); track s.stat.category.id; let i = $index) {
             <circle
@@ -79,6 +79,7 @@ const GAP = 1.2;
 })
 export class DonutChart {
   readonly data = input.required<CategoryStat[]>();
+  readonly label = input('Breakdown by category');
   protected readonly r = R;
   protected readonly active = signal(-1);
 

@@ -1,17 +1,29 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ExpenseService } from '../services/expense.service';
+import { TxType } from '../models/expense';
 import { MoneyPipe } from '../shared/money.pipe';
 import { BarChart } from '../shared/bar-chart';
+import { CashflowChart } from '../shared/cashflow-chart';
 import { ExpenseRow } from '../shared/expense-row';
 import { PERIOD_LABELS, Period, periodRange, startOfDay } from '../utils/date';
-import { byCategory, filterRange, monthlySeries, sum, weekdaySeries } from '../utils/stats';
+import {
+  byCategory,
+  cashflowSeries,
+  filterRange,
+  incomes,
+  savingsRate,
+  spending,
+  sum,
+  weekdaySeries,
+} from '../utils/stats';
 
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'page' },
-  imports: [FormsModule, MoneyPipe, BarChart, ExpenseRow],
+  imports: [FormsModule, MoneyPipe, BarChart, CashflowChart, ExpenseRow, DecimalPipe],
   template: `
     <header class="page-head">
       <div>
@@ -42,33 +54,47 @@ import { byCategory, filterRange, monthlySeries, sum, weekdaySeries } from '../u
 
     <section class="stats">
       <div class="card kpi">
-        <span class="kpi-label">Total spent</span>
+        <span class="kpi-label">Income</span>
+        <strong class="kpi-value pos">{{ incomeTotal() | money }}</strong>
+        <span class="kpi-sub">{{ incomeEntries().length }} {{ incomeEntries().length === 1 ? 'payment' : 'payments' }}</span>
+      </div>
+      <div class="card kpi">
+        <span class="kpi-label">Expenses</span>
         <strong class="kpi-value">{{ total() | money }}</strong>
-        <span class="kpi-sub">{{ labels[period()] }}</span>
+        <span class="kpi-sub">{{ spendEntries().length }} · avg {{ avgTx() | money }}</span>
       </div>
       <div class="card kpi">
-        <span class="kpi-label">Transactions</span>
-        <strong class="kpi-value">{{ entries().length }}</strong>
-        <span class="kpi-sub">Avg {{ avgTx() | money }} each</span>
-      </div>
-      <div class="card kpi">
-        <span class="kpi-label">Per day</span>
-        <strong class="kpi-value">{{ perDay() | money }}</strong>
-        <span class="kpi-sub">Over {{ days() }} {{ days() === 1 ? 'day' : 'days' }}</span>
-      </div>
-      <div class="card kpi">
-        <span class="kpi-label">Top category</span>
-        <strong class="kpi-value sm">
-          @if (cats()[0]; as top) { {{ top.category.icon }} {{ top.category.label }} } @else { — }
+        <span class="kpi-label">Net savings</span>
+        <strong class="kpi-value" [class.pos]="netTotal() > 0" [class.neg]="netTotal() < 0">
+          {{ netTotal() >= 0 ? '+' : '−' }}{{ abs(netTotal()) | money }}
         </strong>
         <span class="kpi-sub">
-          @if (cats()[0]; as top) { {{ top.total | money }} · {{ top.pct.toFixed(0) }}% } @else { No data }
+          @if (savings() !== null) { {{ savings() | number: '1.0-0' }}% savings rate } @else { No income in period }
         </span>
+      </div>
+      <div class="card kpi">
+        <span class="kpi-label">Spent per day</span>
+        <strong class="kpi-value">{{ perDay() | money }}</strong>
+        <span class="kpi-sub">Over {{ days() }} {{ days() === 1 ? 'day' : 'days' }}</span>
       </div>
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>By category</h2></div>
+      <div class="card-head">
+        <h2>Cash flow</h2>
+        <span class="muted small">Last 12 months</span>
+      </div>
+      <app-cashflow-chart [data]="cashflow()" [height]="200" label="Income vs expenses, last 12 months" />
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>By category</h2>
+        <div class="segmented" role="radiogroup" aria-label="Category breakdown type">
+          <button type="button" role="radio" [class.on]="catType() === 'expense'" [attr.aria-checked]="catType() === 'expense'" (click)="catType.set('expense')">Expenses</button>
+          <button type="button" role="radio" [class.on]="catType() === 'income'" [attr.aria-checked]="catType() === 'income'" (click)="catType.set('income')">Income</button>
+        </div>
+      </div>
       @if (cats().length) {
         <ul class="cat-bars">
           @for (c of cats(); track c.category.id) {
@@ -82,37 +108,29 @@ import { byCategory, filterRange, monthlySeries, sum, weekdaySeries } from '../u
           }
         </ul>
       } @else {
-        <p class="muted">No expenses in this period.</p>
+        <p class="muted">No {{ catType() === 'income' ? 'income' : 'expenses' }} in this period.</p>
       }
     </section>
 
     <div class="grid-2">
       <section class="card">
         <div class="card-head">
-          <h2>Monthly trend</h2>
-          <span class="muted small">Last 12 months</span>
-        </div>
-        <app-bar-chart [data]="monthly()" [height]="180" label="Monthly spending, last 12 months" [highlightLast]="true" />
-      </section>
-      <section class="card">
-        <div class="card-head">
-          <h2>By weekday</h2>
+          <h2>Spending by weekday</h2>
           <span class="muted small">{{ labels[period()] }}</span>
         </div>
         <app-bar-chart [data]="weekday()" [height]="180" label="Spending by day of week" />
       </section>
+      <section class="card">
+        <div class="card-head"><h2>Biggest expenses</h2></div>
+        @if (top().length) {
+          <div class="rows">
+            @for (e of top(); track e.index) { <app-expense-row [entry]="e" [showDate]="true" /> }
+          </div>
+        } @else {
+          <p class="muted">Nothing here yet.</p>
+        }
+      </section>
     </div>
-
-    <section class="card">
-      <div class="card-head"><h2>Biggest expenses</h2></div>
-      @if (top().length) {
-        <div class="rows">
-          @for (e of top(); track e.index) { <app-expense-row [entry]="e" [showDate]="true" /> }
-        </div>
-      } @else {
-        <p class="muted">Nothing here yet.</p>
-      }
-    </section>
   `,
   styles: `
     .filters { display: flex; flex-direction: column; gap: 14px; }
@@ -123,7 +141,8 @@ import { byCategory, filterRange, monthlySeries, sum, weekdaySeries } from '../u
     @media (max-width: 1100px) { .stats { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 480px) { .stats { gap: 10px; } }
     .kpi { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-    .kpi-value.sm { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-head { align-items: center; }
+    .card-head .segmented button { padding: 5px 12px; }
     .cat-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
     .cb-top { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; margin-bottom: 6px; }
     .cb-top em { font-style: normal; color: var(--text-3); font-size: 12.5px; }
@@ -136,6 +155,7 @@ import { byCategory, filterRange, monthlySeries, sum, weekdaySeries } from '../u
 })
 export class ReportsPage {
   private readonly svc = inject(ExpenseService);
+  protected readonly abs = Math.abs;
 
   protected readonly periods: Period[] = ['month', 'lastMonth', 'last3Months', 'year', 'all', 'custom'];
   protected readonly labels = PERIOD_LABELS;
@@ -143,13 +163,19 @@ export class ReportsPage {
   protected readonly period = signal<Period>('month');
   protected readonly from = signal('');
   protected readonly to = signal('');
+  protected readonly catType = signal<TxType>('expense');
 
   private readonly range = computed(() => periodRange(this.period(), this.from(), this.to()));
   protected readonly entries = computed(() => filterRange(this.svc.entries(), this.range()));
-  protected readonly total = computed(() => sum(this.entries()));
-  protected readonly avgTx = computed(() => this.total() / (this.entries().length || 1));
+  protected readonly spendEntries = computed(() => spending(this.entries()));
+  protected readonly incomeEntries = computed(() => incomes(this.entries()));
+  protected readonly total = computed(() => sum(this.spendEntries()));
+  protected readonly incomeTotal = computed(() => sum(this.incomeEntries()));
+  protected readonly netTotal = computed(() => this.incomeTotal() - this.total());
+  protected readonly savings = computed(() => savingsRate(this.incomeTotal(), this.total()));
+  protected readonly avgTx = computed(() => this.total() / (this.spendEntries().length || 1));
 
-  /** Number of days covered (capped at today, starting at first expense for open ranges). */
+  /** Number of days covered (capped at today, starting at first transaction for open ranges). */
   protected readonly days = computed(() => {
     const r = this.range();
     const list = this.entries();
@@ -160,10 +186,12 @@ export class ReportsPage {
   });
   protected readonly perDay = computed(() => this.total() / this.days());
 
-  protected readonly cats = computed(() => byCategory(this.entries()));
-  protected readonly monthly = computed(() => monthlySeries(this.svc.entries(), new Date(), 12));
-  protected readonly weekday = computed(() => weekdaySeries(this.entries()));
+  protected readonly cats = computed(() =>
+    byCategory(this.catType() === 'income' ? this.incomeEntries() : this.spendEntries()),
+  );
+  protected readonly cashflow = computed(() => cashflowSeries(this.svc.entries(), new Date(), 12));
+  protected readonly weekday = computed(() => weekdaySeries(this.spendEntries()));
   protected readonly top = computed(() =>
-    [...this.entries()].sort((a, b) => b.expense.amount - a.expense.amount).slice(0, 5),
+    [...this.spendEntries()].sort((a, b) => b.expense.amount - a.expense.amount).slice(0, 5),
   );
 }

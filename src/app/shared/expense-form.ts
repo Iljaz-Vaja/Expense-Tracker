@@ -10,8 +10,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CATEGORIES, DEFAULT_CATEGORY } from '../models/category';
-import { Expense } from '../models/expense';
+import { Router } from '@angular/router';
+import { defaultCategoryOf, getCategory } from '../models/category';
+import { Expense, TxType, txType } from '../models/expense';
 import { ExpenseService } from '../services/expense.service';
 import { SettingsService } from '../services/settings.service';
 import { FormState, UiService } from '../services/ui.service';
@@ -28,14 +29,23 @@ import { Icon } from './icon';
       <div class="overlay" (click)="close()"></div>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="form-title">
         <header class="sheet-head">
-          <h2 id="form-title">{{ s.index === null ? 'New expense' : 'Edit expense' }}</h2>
+          <h2 id="form-title">{{ s.index === null ? 'New' : 'Edit' }} {{ type() === 'income' ? 'income' : 'expense' }}</h2>
           <button type="button" class="icon-btn" (click)="close()" aria-label="Close">
             <app-icon name="close" />
           </button>
         </header>
 
         <form (ngSubmit)="save(false)" novalidate>
-          <label class="amount-field" [class.invalid]="submitted() && !amountValid()">
+          <div class="type-toggle" role="radiogroup" aria-label="Transaction type">
+            <button type="button" role="radio" class="expense" [class.on]="type() === 'expense'" [attr.aria-checked]="type() === 'expense'" (click)="setType('expense')">
+              <app-icon name="out" [size]="16" /> Expense
+            </button>
+            <button type="button" role="radio" class="income" [class.on]="type() === 'income'" [attr.aria-checked]="type() === 'income'" (click)="setType('income')">
+              <app-icon name="in" [size]="16" /> Income
+            </button>
+          </div>
+
+          <label class="amount-field" [class.income]="type() === 'income'" [class.invalid]="submitted() && !amountValid()">
             @if (cur.prefix) { <span class="cur">{{ cur.symbol }}</span> }
             <input
               #amountInput
@@ -63,7 +73,7 @@ import { Icon } from './icon';
               list="title-suggestions"
               autocomplete="off"
               maxlength="80"
-              placeholder="e.g. Groceries, Coffee, Fuel"
+              [placeholder]="type() === 'income' ? 'e.g. Salary, Client payment' : 'e.g. Groceries, Coffee, Fuel'"
               [class.invalid]="submitted() && !title().trim()"
               [ngModel]="title()"
               (ngModelChange)="onTitle($event)"
@@ -71,13 +81,16 @@ import { Icon } from './icon';
             <datalist id="title-suggestions">
               @for (t of suggestions(); track t) { <option [value]="t"></option> }
             </datalist>
-            @if (submitted() && !title().trim()) { <p class="err">Give this expense a title</p> }
+            @if (submitted() && !title().trim()) { <p class="err">Give this transaction a title</p> }
           </div>
 
           <div class="field">
-            <span class="label" id="cat-label">Category</span>
+            <div class="label-row">
+              <span class="label" id="cat-label">Category</span>
+              <button type="button" class="link small" (click)="manageCategories()">Manage</button>
+            </div>
             <div class="cat-grid" role="radiogroup" aria-labelledby="cat-label">
-              @for (c of categories; track c.id) {
+              @for (c of categories(); track c.id) {
                 <button
                   type="button"
                   role="radio"
@@ -133,7 +146,7 @@ import { Icon } from './icon';
               <button type="button" class="btn btn-ghost" (click)="save(true)">Save & add another</button>
             }
             <button type="submit" class="btn btn-primary">
-              <app-icon name="check" [size]="18" /> {{ s.index === null ? 'Add expense' : 'Save changes' }}
+              <app-icon name="check" [size]="18" /> {{ s.index !== null ? 'Save changes' : type() === 'income' ? 'Add income' : 'Add expense' }}
             </button>
           </footer>
         </form>
@@ -153,6 +166,10 @@ import { Icon } from './icon';
     .amount-field { display: flex; align-items: baseline; justify-content: center; gap: 8px; padding: 14px; border-radius: 16px; background: var(--surface-2); border: 2px solid transparent; }
     .amount-field:focus-within { border-color: var(--accent); }
     .amount-field.invalid { border-color: var(--critical); }
+    .amount-field.income input, .amount-field.income .cur { color: var(--income); }
+    .label-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .label-row .label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+    .label-row .link { font-size: 13px; }
     .amount-field input { all: unset; font-size: 40px; font-weight: 700; letter-spacing: -.02em; max-width: 260px; text-align: center; font-variant-numeric: tabular-nums; field-sizing: content; min-width: 1.2ch; }
     @supports not (field-sizing: content) { .amount-field input { width: 100%; } }
     .amount-field input::-webkit-outer-spin-button, .amount-field input::-webkit-inner-spin-button { -webkit-appearance: none; }
@@ -181,16 +198,17 @@ export class ExpenseForm {
   private readonly ui = inject(UiService);
   private readonly svc = inject(ExpenseService);
   private readonly settings = inject(SettingsService);
+  private readonly router = inject(Router);
 
   protected readonly state = this.ui.form;
-  protected readonly categories = CATEGORIES;
   protected get cur() {
     return this.settings.currency;
   }
 
   protected readonly amount = signal<number | null>(null);
   protected readonly title = signal('');
-  protected readonly category = signal(DEFAULT_CATEGORY);
+  protected readonly type = signal<TxType>('expense');
+  protected readonly category = signal(defaultCategoryOf('expense'));
   protected readonly date = signal('');
   protected readonly note = signal('');
   protected readonly submitted = signal(false);
@@ -201,10 +219,20 @@ export class ExpenseForm {
   protected readonly amountValid = computed(() => (Number(this.amount()) || 0) > 0);
   protected readonly dateValid = computed(() => !isNaN(new Date(this.date()).getTime()));
 
+  /** Categories the user chose to show, plus the current one if it is hidden (editing). */
+  protected readonly categories = computed(() => {
+    this.settings.settings();
+    const list = this.settings.visibleCategories(this.type());
+    const cur = getCategory(this.category(), this.type());
+    return list.some((c) => c.id === cur.id) || cur.type !== this.type() ? list : [...list, cur];
+  });
+
   /** Previous titles (most used first) + the category last used with each. */
   private readonly history = computed(() => {
     const counts = new Map<string, { title: string; n: number; category?: string }>();
+    const type = this.type();
     for (const e of this.svc.expenses()) {
+      if (txType(e) !== type) continue;
       const key = e.title.trim().toLowerCase();
       if (!key) continue;
       const cur = counts.get(key) ?? { title: e.title.trim(), n: 0 };
@@ -230,7 +258,9 @@ export class ExpenseForm {
   private reset(init: Partial<Expense>) {
     this.amount.set(init.amount ?? null);
     this.title.set(init.title ?? '');
-    this.category.set(init.category ?? DEFAULT_CATEGORY);
+    const type = txType(init);
+    this.type.set(type);
+    this.category.set(init.category ?? defaultCategoryOf(type));
     this.date.set(init.date ? toInputValue(init.date) : toLocalInput(new Date()));
     this.note.set(init.note ?? '');
     this.submitted.set(false);
@@ -242,6 +272,21 @@ export class ExpenseForm {
     if (this.categoryTouched) return;
     const known = this.history().get(value.trim().toLowerCase());
     if (known?.category) this.category.set(known.category);
+  }
+
+  protected setType(type: TxType) {
+    if (type === this.type()) return;
+    this.type.set(type);
+    if (getCategory(this.category(), type).type !== type || !this.categoryTouched) {
+      this.category.set(defaultCategoryOf(type));
+      this.categoryTouched = false;
+      this.onTitle(this.title());
+    }
+  }
+
+  protected manageCategories() {
+    this.close();
+    this.router.navigate(['/settings'], { fragment: 'categories' });
   }
 
   protected pickCategory(id: string) {
@@ -269,14 +314,17 @@ export class ExpenseForm {
       amount: Math.round(Number(this.amount()) * 100) / 100,
       date: this.date(),
       category: this.category(),
+      type: this.type(),
     };
+    // Expenses are stored without `type` – identical to records from earlier versions.
+    if (expense.type === 'expense') delete expense.type;
     const note = this.note().trim();
     if (note) expense.note = note;
     else delete expense.note;
 
     if (s && s.index !== null) {
       this.svc.updateExpense(s.index, expense);
-      this.ui.toast('Expense updated', { tone: 'success' });
+      this.ui.toast('Transaction updated', { tone: 'success' });
       this.close();
       return;
     }

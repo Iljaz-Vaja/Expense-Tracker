@@ -18,6 +18,12 @@ kbd { margin-left: auto; font: 600 11px/1 inherit; font-family: inherit; padding
 .mini-progress div { height: 100%; background: var(--good); border-radius: 99px; }
 .mini-progress div.over { background: var(--critical); }
 .theme-btn { justify-content: flex-start; }
+.add-group { display: flex; flex-direction: column; gap: 8px; }
+.btn-income { background: color-mix(in srgb, var(--income) 12%, var(--surface)); color: var(--income); border-color: color-mix(in srgb, var(--income) 30%, transparent); }
+.btn-income:hover { background: color-mix(in srgb, var(--income) 20%, var(--surface)); }
+.btn-income kbd { background: color-mix(in srgb, var(--income) 18%, transparent); }
+.io { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.io span { display: inline-flex; align-items: center; gap: 4px; }
 
 /* ---------- Top bar & bottom nav (mobile) ---------- */
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--border); }

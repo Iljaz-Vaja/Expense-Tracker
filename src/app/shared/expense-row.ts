@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { ExpenseEntry } from '../models/expense';
+import { ExpenseEntry, isIncome, txType } from '../models/expense';
 import { getCategory } from '../models/category';
 import { MoneyPipe } from './money.pipe';
 import { Icon } from './icon';
@@ -29,7 +29,7 @@ import { UiService } from '../services/ui.service';
             }
           </span>
         </span>
-        <span class="amt">−{{ entry().expense.amount | money }}</span>
+        <span class="amt" [class.income]="income()">{{ income() ? '+' : '−' }}{{ entry().expense.amount | money }}</span>
       </button>
       <div class="actions">
         <button type="button" class="icon-btn sm" (click)="ui.duplicate(entry().expense)" title="Duplicate" aria-label="Duplicate">
@@ -51,6 +51,7 @@ import { UiService } from '../services/ui.service';
     .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sub { font-size: 12.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .amt { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .amt.income { color: var(--income); }
     .actions { display: flex; gap: 2px; padding-right: 6px; opacity: 0; transition: opacity .15s; }
     .row:hover .actions, .row:focus-within .actions { opacity: 1; }
     @media (hover: none) { .actions { opacity: 1; } }
@@ -60,5 +61,6 @@ export class ExpenseRow {
   readonly entry = input.required<ExpenseEntry>();
   readonly showDate = input(false);
   protected readonly ui = inject(UiService);
-  protected readonly cat = computed(() => getCategory(this.entry().expense.category));
+  protected readonly income = computed(() => isIncome(this.entry().expense));
+  protected readonly cat = computed(() => getCategory(this.entry().expense.category, txType(this.entry().expense)));
 }

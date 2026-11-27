@@ -7,7 +7,7 @@ import { ExpenseForm } from './shared/expense-form';
 import { Toasts } from './shared/toasts';
 import { Icon } from './shared/icon';
 import { MoneyPipe } from './shared/money.pipe';
-import { filterRange, sum } from './utils/stats';
+import { filterRange, incomes, net, spending, sum } from './utils/stats';
 import { periodRange } from './utils/date';
 
 interface NavItem {
@@ -42,7 +42,11 @@ export class App {
     { path: '/settings', label: 'Settings', icon: 'settings', exact: false },
   ];
 
-  protected readonly monthTotal = computed(() => sum(filterRange(this.svc.entries(), periodRange('month'))));
+  private readonly month = computed(() => filterRange(this.svc.entries(), periodRange('month')));
+  protected readonly monthTotal = computed(() => sum(spending(this.month())));
+  protected readonly monthIncome = computed(() => sum(incomes(this.month())));
+  protected readonly monthNet = computed(() => net(this.month()));
+  protected readonly abs = Math.abs;
   protected readonly budget = computed(() => Number(this.settings.settings().monthlyBudget) || 0);
   protected readonly budgetPct = computed(() => Math.min(100, (this.monthTotal() / (this.budget() || 1)) * 100));
   protected readonly theme = computed(() => this.settings.settings().theme);
@@ -58,7 +62,7 @@ export class App {
     this.ui.toast(`Theme: ${next === 'system' ? 'Auto' : next[0].toUpperCase() + next.slice(1)}`);
   }
 
-  /** Keyboard shortcut: press N to add an expense. */
+  /** Keyboard shortcuts: N adds an expense, I adds income. */
   protected onKey(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     if (e.ctrlKey || e.metaKey || e.altKey || this.ui.form()) return;
@@ -66,6 +70,9 @@ export class App {
     if (e.key === 'n' || e.key === 'N') {
       e.preventDefault();
       this.ui.openAdd();
+    } else if (e.key === 'i' || e.key === 'I') {
+      e.preventDefault();
+      this.ui.openAdd({ type: 'income' });
     }
   }
 }
